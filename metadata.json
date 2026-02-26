@@ -1,0 +1,5 @@
+{
+  "name": "Imposter Architect 3D",
+  "description": "A multiplayer 3D voxel-based game where players build together and try to find the imposter.",
+  "requestFramePermissions": []
+}
