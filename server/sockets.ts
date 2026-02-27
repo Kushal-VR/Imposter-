@@ -109,6 +109,48 @@ export function setupSockets(io: Server) {
       }
     });
 
+    socket.on('sabotage', (position: [number, number, number]) => {
+      let roomId = null;
+      for (const r in rooms) {
+        if (rooms[r].players[socket.id]) {
+          roomId = r;
+          break;
+        }
+      }
+      if (!roomId) return;
+
+      const room = rooms[roomId];
+      const player = room.players[socket.id];
+      
+      if (room.phase !== 'Build' || player.role !== 'imposter') return;
+
+      const radius = 3;
+      const [px, py, pz] = position;
+      
+      const blocksToRemove: {x: number, y: number, z: number}[] = [];
+
+      for (const key in room.world) {
+        const block = room.world[key];
+        // Don't destroy the floor (y = -1)
+        if (block.y === -1) continue;
+
+        const dx = block.x - px;
+        const dy = block.y - py;
+        const dz = block.z - pz;
+        const distance = Math.sqrt(dx*dx + dy*dy + dz*dz);
+
+        if (distance <= radius) {
+          blocksToRemove.push({ x: block.x, y: block.y, z: block.z });
+        }
+      }
+
+      blocksToRemove.forEach(pos => {
+        const key = `${pos.x},${pos.y},${pos.z}`;
+        delete room.world[key];
+        io.to(roomId).emit('blockRemoved', pos);
+      });
+    });
+
     socket.on('startGame', () => {
       let roomId = null;
       for (const r in rooms) {

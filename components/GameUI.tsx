@@ -25,6 +25,19 @@ export function GameUI() {
               <span className="text-zinc-500 text-sm">Word:</span> <span className="font-mono font-bold">{secretWord}</span>
             </p>
           )}
+          {role === 'imposter' && phase === 'Build' && (
+            <div className="mt-4">
+              <p className="text-xs text-zinc-400 mb-2">Press &apos;E&apos; or click below to destroy nearby blocks</p>
+              <button 
+                onClick={() => {
+                  window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyE' }));
+                }}
+                className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition-colors text-sm"
+              >
+                SABOTAGE
+              </button>
+            </div>
+          )}
         </div>
       </div>
 

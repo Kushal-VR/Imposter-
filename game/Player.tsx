@@ -14,9 +14,10 @@ export function Player() {
   const { rapier, world } = useRapier();
   const bodyRef = useRef<any>(null);
   const [, getKeys] = useKeyboardControls();
-  const { move, phase, placeBlock, removeBlock, world: gameWorld } = useGameStore();
+  const { move, phase, placeBlock, removeBlock, world: gameWorld, role, sabotage } = useGameStore();
 
   const [currentColor, setCurrentColor] = useState('#ef4444');
+  const [lastSabotage, setLastSabotage] = useState(0);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -24,10 +25,20 @@ export function Player() {
         const index = parseInt(e.key) - 1;
         if (COLORS[index]) setCurrentColor(COLORS[index]);
       }
+      if (e.code === 'KeyE' && role === 'imposter' && phase === 'Build') {
+        const now = Date.now();
+        if (now - lastSabotage > 5000) { // 5 second cooldown
+          if (bodyRef.current) {
+            const pos = bodyRef.current.translation();
+            sabotage([pos.x, pos.y, pos.z]);
+            setLastSabotage(now);
+          }
+        }
+      }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  }, [role, phase, lastSabotage, sabotage]);
 
   useEffect(() => {
     let isDragging = false;
@@ -171,7 +182,7 @@ export function Player() {
     const ray = new rapier.Ray(rayOrigin, rayDir);
     const hit = world.castRay(ray, 0.5, true);
 
-    if (jump && hit && hit.toi < 0.2) {
+    if (jump && hit && (hit as any).toi < 0.2) {
       bodyRef.current.setLinvel({ x: velocity.x, y: JUMP_FORCE, z: velocity.z }, true);
     }
 

@@ -23,6 +23,7 @@ interface GameState {
   startGame: () => void;
   vote: (votedId: string) => void;
   sendChat: (message: string) => void;
+  sabotage: (position: [number, number, number]) => void;
 }
 
 export const useGameStore = create<GameState>((set, get) => ({
@@ -205,6 +206,13 @@ export const useGameStore = create<GameState>((set, get) => ({
     const { socket } = get();
     if (socket) {
       socket.emit('chat', message);
+    }
+  },
+
+  sabotage: (position) => {
+    const { socket } = get();
+    if (socket) {
+      socket.emit('sabotage', position);
     }
   }
 }));
