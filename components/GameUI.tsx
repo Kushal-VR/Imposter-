@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useGameStore } from '../store/gameStore';
 
 export function GameUI() {
-  const { phase, role, secretWord, timer, players, votes, vote, sendChat, messages, socket, lastSabotage, currentColor, currentShape, setCurrentColor, setCurrentShape } = useGameStore();
+  const { phase, role, secretWord, timer, players, votes, vote, sendChat, messages, socket, lastSabotage, currentColor, currentShape, setCurrentColor, setCurrentShape, imposterId } = useGameStore();
   const [chatInput, setChatInput] = useState('');
   const [cooldown, setCooldown] = useState(0);
 
@@ -128,8 +128,6 @@ export function GameUI() {
             <h3 className="text-2xl font-bold text-white mb-2">Game Over</h3>
             
             {(() => {
-              const { imposterId } = useGameStore.getState();
-              
               // Count votes
               const voteCounts: Record<string, number> = {};
               for (const voter in votes) {
@@ -184,35 +182,44 @@ export function GameUI() {
       </div>
       
       {/* Crosshair */}
-      <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none">
-        <div className="absolute top-1/2 left-0 w-full h-0.5 bg-white/50 -translate-y-1/2"></div>
-        <div className="absolute left-1/2 top-0 h-full w-0.5 bg-white/50 -translate-x-1/2"></div>
+      <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-6 h-6 pointer-events-none flex items-center justify-center">
+        <div className="absolute w-1.5 h-1.5 bg-white rounded-full shadow-[0_0_4px_rgba(0,0,0,0.5)]"></div>
+        <div className="absolute top-0 left-1/2 w-0.5 h-2 bg-white/90 -translate-x-1/2 shadow-[0_0_4px_rgba(0,0,0,0.5)]"></div>
+        <div className="absolute bottom-0 left-1/2 w-0.5 h-2 bg-white/90 -translate-x-1/2 shadow-[0_0_4px_rgba(0,0,0,0.5)]"></div>
+        <div className="absolute left-0 top-1/2 h-0.5 w-2 bg-white/90 -translate-y-1/2 shadow-[0_0_4px_rgba(0,0,0,0.5)]"></div>
+        <div className="absolute right-0 top-1/2 h-0.5 w-2 bg-white/90 -translate-y-1/2 shadow-[0_0_4px_rgba(0,0,0,0.5)]"></div>
       </div>
 
       {/* Toolbar */}
       {phase === 'Build' && (
-        <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 pointer-events-auto flex flex-col items-center gap-2">
-          <div className="bg-zinc-900/80 backdrop-blur-md p-2 rounded-xl border border-zinc-700/50 shadow-lg flex gap-2">
+        <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 pointer-events-auto flex flex-col items-center gap-3">
+          <div className="bg-zinc-900/90 backdrop-blur-xl p-3 rounded-2xl border border-zinc-700/50 shadow-2xl flex gap-3">
             {COLORS.map((color, i) => (
               <button
                 key={color}
                 onClick={() => setCurrentColor(color)}
-                className={`w-10 h-10 rounded-lg border-2 transition-transform ${currentColor === color ? 'border-white scale-110' : 'border-transparent hover:scale-105'}`}
+                className={`relative w-12 h-12 rounded-xl border-2 transition-all duration-200 ${currentColor === color ? 'border-white scale-110 shadow-lg z-10' : 'border-transparent hover:scale-105 opacity-80 hover:opacity-100'}`}
                 style={{ backgroundColor: color }}
                 title={`Color ${i + 1}`}
-              />
-            ))}
-          </div>
-          <div className="bg-zinc-900/80 backdrop-blur-md p-2 rounded-xl border border-zinc-700/50 shadow-lg flex gap-2">
-            {SHAPES.map((shape) => (
-              <button
-                key={shape}
-                onClick={() => setCurrentShape(shape)}
-                className={`px-4 py-2 rounded-lg font-bold text-sm uppercase transition-all ${currentShape === shape ? 'bg-emerald-500 text-white ring-2 ring-white scale-105 shadow-[0_0_15px_rgba(16,185,129,0.5)]' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-white'}`}
               >
-                {shape}
+                <span className="absolute -top-2 -right-2 bg-zinc-800 text-white text-[10px] w-5 h-5 rounded-full flex items-center justify-center border border-zinc-600 shadow-sm">{i + 1}</span>
               </button>
             ))}
+          </div>
+          <div className="bg-zinc-900/90 backdrop-blur-xl p-2 rounded-xl border border-zinc-700/50 shadow-2xl flex gap-2">
+            {SHAPES.map((shape, i) => {
+              const keys = ['Z', 'X', 'C'];
+              return (
+                <button
+                  key={shape}
+                  onClick={() => setCurrentShape(shape)}
+                  className={`relative px-5 py-2 rounded-lg font-bold text-sm uppercase transition-all duration-200 ${currentShape === shape ? 'bg-emerald-500 text-white ring-2 ring-white scale-105 shadow-[0_0_20px_rgba(16,185,129,0.4)]' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-white'}`}
+                >
+                  {shape}
+                  <span className="absolute -top-2 -right-2 bg-zinc-800 text-white text-[10px] w-5 h-5 rounded-full flex items-center justify-center border border-zinc-600 shadow-sm">{keys[i]}</span>
+                </button>
+              );
+            })}
           </div>
         </div>
       )}

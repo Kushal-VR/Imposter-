@@ -1,5 +1,6 @@
 import { useRef, useEffect } from 'react';
 import { useFrame } from '@react-three/fiber';
+import { Text } from '@react-three/drei';
 import { Player } from '../server/types';
 import { Vector3, Euler, Quaternion } from 'three';
 
@@ -28,10 +29,17 @@ export function OtherPlayer({ player }: { player: Player }) {
         <meshStandardMaterial color={player.role === 'imposter' ? '#ef4444' : '#3b82f6'} />
       </mesh>
       {/* Name tag */}
-      <mesh position={[0, 2, 0]}>
-        <planeGeometry args={[1, 0.2]} />
-        <meshBasicMaterial color="black" transparent opacity={0.5} />
-      </mesh>
+      <Text
+        position={[0, 2, 0]}
+        fontSize={0.3}
+        color="white"
+        anchorX="center"
+        anchorY="middle"
+        outlineWidth={0.02}
+        outlineColor="black"
+      >
+        {player.name}
+      </Text>
     </group>
   );
 }

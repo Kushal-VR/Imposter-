@@ -63,6 +63,7 @@ export function Player() {
     const rayOrigin = camera.position.clone();
     const rayDir = new Vector3();
     camera.getWorldDirection(rayDir);
+    rayOrigin.add(rayDir.clone().multiplyScalar(0.5)); // Offset to avoid hitting player
     const ray = new rapier.Ray(rayOrigin, rayDir);
     const hit = world.castRay(ray, 10, true);
 
@@ -165,6 +166,7 @@ export function Player() {
         const rayOrigin = camera.position.clone();
         const rayDir = new Vector3();
         camera.getWorldDirection(rayDir);
+        rayOrigin.add(rayDir.clone().multiplyScalar(0.5)); // Offset to avoid hitting player
         const ray = new rapier.Ray(rayOrigin, rayDir);
         const hit = world.castRayAndGetNormal(ray, 10, true);
 
@@ -181,10 +183,20 @@ export function Player() {
               } else if (e.button === 0) { // Left click - place
                 const normal = hit.normal;
                 if (!normal) return;
+                
+                // Snap normal to dominant axis
+                const absX = Math.abs(normal.x);
+                const absY = Math.abs(normal.y);
+                const absZ = Math.abs(normal.z);
+                const snappedNormal = new Vector3(0, 0, 0);
+                if (absX > absY && absX > absZ) snappedNormal.x = Math.sign(normal.x);
+                else if (absY > absX && absY > absZ) snappedNormal.y = Math.sign(normal.y);
+                else snappedNormal.z = Math.sign(normal.z);
+
                 const placePos = new Vector3(
-                  Math.round(hitPos.x + normal.x),
-                  Math.round(hitPos.y + normal.y),
-                  Math.round(hitPos.z + normal.z)
+                  Math.round(hitPos.x + snappedNormal.x),
+                  Math.round(hitPos.y + snappedNormal.y),
+                  Math.round(hitPos.z + snappedNormal.z)
                 );
                 placeBlock({
                   x: placePos.x,
@@ -248,13 +260,7 @@ export function Player() {
     bodyRef.current.setLinvel({ x: direction.x, y: velocity.y, z: direction.z }, true);
 
     // Jumping
-    const rayOrigin = bodyRef.current.translation();
-    rayOrigin.y -= 1; // Bottom of capsule
-    const rayDir = { x: 0, y: -1, z: 0 };
-    const ray = new rapier.Ray(rayOrigin, rayDir);
-    const hit = world.castRay(ray, 0.5, true);
-
-    if (jump && hit && (hit as any).toi < 0.2) {
+    if (jump && Math.abs(velocity.y) < 0.05) {
       bodyRef.current.setLinvel({ x: velocity.x, y: JUMP_FORCE, z: velocity.z }, true);
     }
 

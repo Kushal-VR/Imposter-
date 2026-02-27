@@ -1,7 +1,7 @@
 'use client';
 
 import { Canvas } from '@react-three/fiber';
-import { Sky, PointerLockControls, KeyboardControls } from '@react-three/drei';
+import { Sky, PointerLockControls, KeyboardControls, Environment, ContactShadows } from '@react-three/drei';
 import { Physics } from '@react-three/rapier';
 import { useGameStore } from '../store/gameStore';
 import { Lobby } from '../components/Lobby';
@@ -30,18 +30,20 @@ export default function GameApp() {
         ]}
       >
         <Canvas shadows camera={{ fov: 75 }}>
-          <Sky sunPosition={[100, 20, 100]} />
-          <ambientLight intensity={0.3} />
+          <Sky sunPosition={[100, 20, 100]} turbidity={0.1} rayleigh={0.5} />
+          <ambientLight intensity={0.4} />
           <directionalLight
             castShadow
-            position={[100, 100, 100]}
+            position={[50, 50, 20]}
             intensity={1.5}
             shadow-mapSize={[2048, 2048]}
             shadow-camera-left={-50}
             shadow-camera-right={50}
             shadow-camera-top={50}
             shadow-camera-bottom={-50}
+            shadow-bias={-0.0001}
           />
+          <Environment preset="city" />
 
           <Physics gravity={[0, -20, 0]}>
             <World />
