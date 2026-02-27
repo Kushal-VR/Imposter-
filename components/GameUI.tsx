@@ -208,7 +208,7 @@ export function GameUI() {
               <button
                 key={shape}
                 onClick={() => setCurrentShape(shape)}
-                className={`px-4 py-2 rounded-lg font-bold text-sm uppercase transition-colors ${currentShape === shape ? 'bg-emerald-500 text-white' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-white'}`}
+                className={`px-4 py-2 rounded-lg font-bold text-sm uppercase transition-all ${currentShape === shape ? 'bg-emerald-500 text-white ring-2 ring-white scale-105 shadow-[0_0_15px_rgba(16,185,129,0.5)]' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-white'}`}
               >
                 {shape}
               </button>

@@ -6,14 +6,12 @@ import { Physics } from '@react-three/rapier';
 import { useGameStore } from '../store/gameStore';
 import { Lobby } from '../components/Lobby';
 import { GameUI } from '../components/GameUI';
+import { MobileControls } from '../components/MobileControls';
 import { Player } from '../game/Player';
 import { OtherPlayer } from '../game/OtherPlayer';
 import { World } from '../game/World';
-import dynamic from 'next/dynamic';
 
-const MobileControls = dynamic(() => import('../components/MobileControls').then(mod => mod.MobileControls), { ssr: false });
-
-export default function Game() {
+export default function GameApp() {
   const { players, socket, phase } = useGameStore();
 
   return (

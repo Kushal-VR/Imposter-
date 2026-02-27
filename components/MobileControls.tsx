@@ -22,7 +22,7 @@ export function MobileControls() {
     const state = keysRef.current as any;
     if (state[key] !== isDown) {
       state[key] = isDown;
-      document.dispatchEvent(new KeyboardEvent(isDown ? 'keydown' : 'keyup', { code }));
+      window.dispatchEvent(new KeyboardEvent(isDown ? 'keydown' : 'keyup', { code }));
     }
   };
 
@@ -43,9 +43,9 @@ export function MobileControls() {
   };
 
   const handleJump = () => {
-    document.dispatchEvent(new KeyboardEvent('keydown', { code: 'Space' }));
+    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'Space' }));
     setTimeout(() => {
-      document.dispatchEvent(new KeyboardEvent('keyup', { code: 'Space' }));
+      window.dispatchEvent(new KeyboardEvent('keyup', { code: 'Space' }));
     }, 100);
   };
 
@@ -57,8 +57,14 @@ export function MobileControls() {
       
       <div className="pointer-events-auto opacity-70 flex flex-col gap-4">
         <button 
+          onPointerDown={() => window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyF' }))}
+          className="w-16 h-16 rounded-full bg-blue-600 border-2 border-blue-500 text-white font-bold flex items-center justify-center active:bg-blue-700 text-xs"
+        >
+          CURVE
+        </button>
+        <button 
           onPointerDown={handleJump}
-          className="w-16 h-16 rounded-full bg-zinc-800 border-2 border-zinc-600 text-white font-bold flex items-center justify-center active:bg-zinc-700"
+          className="w-16 h-16 rounded-full bg-zinc-800 border-2 border-zinc-600 text-white font-bold flex items-center justify-center active:bg-zinc-700 text-xs"
         >
           JUMP
         </button>

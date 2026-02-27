@@ -24,6 +24,7 @@ interface GameState {
   move: (position: [number, number, number], rotation: [number, number, number]) => void;
   placeBlock: (block: Block) => void;
   removeBlock: (pos: { x: number, y: number, z: number }) => void;
+  updateBlock: (block: Block) => void;
   startGame: () => void;
   vote: (votedId: string) => void;
   sendChat: (message: string) => void;
@@ -153,6 +154,12 @@ export const useGameStore = create<GameState>((set, get) => ({
       });
     });
 
+    socket.on('blockUpdated', (block: Block) => {
+      set((state) => ({
+        world: { ...state.world, [`${block.x},${block.y},${block.z}`]: block }
+      }));
+    });
+
     socket.on('gameStarted', (data: { phase: GamePhase, role: any, secretWord: string | null }) => {
       set({ phase: data.phase, role: data.role, secretWord: data.secretWord });
     });
@@ -210,6 +217,13 @@ export const useGameStore = create<GameState>((set, get) => ({
     const { socket } = get();
     if (socket) {
       socket.emit('removeBlock', pos);
+    }
+  },
+
+  updateBlock: (block) => {
+    const { socket } = get();
+    if (socket) {
+      socket.emit('updateBlock', block);
     }
   },
 

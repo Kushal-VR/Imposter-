@@ -14,6 +14,7 @@ export function World() {
             position={[block.x, block.y, block.z]}
             type="fixed"
             colliders={shape === 'sphere' ? 'ball' : shape === 'cylinder' ? 'hull' : 'cuboid'}
+            userData={{ isBlock: true, x: block.x, y: block.y, z: block.z }}
           >
             <mesh castShadow receiveShadow>
               {shape === 'cube' && <boxGeometry args={[1, 1, 1]} />}

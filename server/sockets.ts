@@ -1,6 +1,6 @@
 import { Server, Socket } from 'socket.io';
 import { Room, Player, Block } from './types';
-import { pool } from './db';
+import { query } from './db';
 
 const rooms: Record<string, Room> = {};
 const WORDS = ['Castle', 'Spaceship', 'Pyramid', 'Treehouse', 'Bridge', 'Robot'];
@@ -106,6 +106,26 @@ export function setupSockets(io: Server) {
       if (room.world[key]) {
         delete room.world[key];
         io.to(roomId).emit('blockRemoved', pos);
+      }
+    });
+
+    socket.on('updateBlock', (block: Block) => {
+      let roomId = null;
+      for (const r in rooms) {
+        if (rooms[r].players[socket.id]) {
+          roomId = r;
+          break;
+        }
+      }
+      if (!roomId) return;
+
+      const room = rooms[roomId];
+      if (room.phase !== 'Build') return;
+
+      const key = `${block.x},${block.y},${block.z}`;
+      if (room.world[key]) {
+        room.world[key] = block;
+        io.to(roomId).emit('blockUpdated', block);
       }
     });
 
@@ -282,7 +302,7 @@ export function setupSockets(io: Server) {
             // Imposter wins if they are not the most voted
             const imposterWon = mostVotedId !== imposterId;
 
-            pool.query(
+            query(
               'INSERT INTO game_results (room_id, imposter_id, imposter_name, imposter_won) VALUES ($1, $2, $3, $4)',
               [roomId, imposterId, imposterName, imposterWon]
             ).catch(err => console.error('Failed to save game result:', err));

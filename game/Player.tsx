@@ -44,7 +44,7 @@ export function Player() {
   const { rapier, world } = useRapier();
   const bodyRef = useRef<any>(null);
   const [, getKeys] = useKeyboardControls();
-  const { move, phase, placeBlock, removeBlock, world: gameWorld, role, sabotage, lastSabotage, setLastSabotage, currentColor, currentShape, setCurrentColor, setCurrentShape } = useGameStore();
+  const { move, phase, placeBlock, removeBlock, updateBlock, world: gameWorld, role, sabotage, lastSabotage, setLastSabotage, currentColor, currentShape, setCurrentColor, setCurrentShape } = useGameStore();
 
   const [effects, setEffects] = useState<{ id: number, pos: Vector3, color: string, type: 'place' | 'remove', shape?: 'cube' | 'sphere' | 'cylinder' }[]>([]);
   const handRef = useRef<Mesh>(null);
@@ -57,6 +57,35 @@ export function Player() {
     }, 1000);
   };
 
+  const handleCurve = () => {
+    if (phase !== 'Build') return;
+    
+    const rayOrigin = camera.position.clone();
+    const rayDir = new Vector3();
+    camera.getWorldDirection(rayDir);
+    const ray = new rapier.Ray(rayOrigin, rayDir);
+    const hit = world.castRay(ray, 10, true);
+
+    if (hit && hit.collider) {
+      const rigidBody = hit.collider.parent();
+      if (rigidBody) {
+        const userData = rigidBody.userData as any;
+        if (userData && userData.isBlock) {
+          const key = `${userData.x},${userData.y},${userData.z}`;
+          const block = gameWorld[key];
+          if (block) {
+            updateBlock({
+              ...block,
+              shape: currentShape,
+              color: currentColor
+            });
+            addEffect(new Vector3(userData.x, userData.y, userData.z), currentColor, 'place', currentShape);
+          }
+        }
+      }
+    }
+  };
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.code >= 'Digit1' && e.code <= 'Digit5') {
@@ -67,6 +96,10 @@ export function Player() {
       if (e.code === 'KeyX') setCurrentShape('sphere');
       if (e.code === 'KeyC') setCurrentShape('cylinder');
       
+      if (e.code === 'KeyF') {
+        handleCurve();
+      }
+
       if (e.code === 'KeyE' && role === 'imposter' && phase === 'Build') {
         const now = Date.now();
         if (now - lastSabotage > 5000) { // 5 second cooldown
@@ -80,7 +113,7 @@ export function Player() {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [role, phase, lastSabotage, sabotage]);
+  }, [role, phase, lastSabotage, sabotage, setCurrentColor, setCurrentShape, currentShape, currentColor, gameWorld, updateBlock, world, camera, rapier]);
 
   useEffect(() => {
     let isDragging = false;
@@ -129,56 +162,44 @@ export function Player() {
   useEffect(() => {
     const handleMouseClick = (e: MouseEvent) => {
       if ((document.pointerLockElement || ('ontouchstart' in window)) && phase === 'Build') {
-        const raycaster = new Raycaster();
-        raycaster.setFromCamera(new Vector2(0, 0), camera);
+        const rayOrigin = camera.position.clone();
+        const rayDir = new Vector3();
+        camera.getWorldDirection(rayDir);
+        const ray = new rapier.Ray(rayOrigin, rayDir);
+        const hit = world.castRayAndGetNormal(ray, 10, true);
 
-        // Simple raycast against blocks
-        // We can do this by checking distance to all blocks, or using Three.js raycaster if we had meshes.
-        // Since we use instanced mesh or individual meshes, let's just do a simple grid traversal
-        
-        const pos = camera.position.clone();
-        const dir = raycaster.ray.direction.clone().normalize();
-        
-        let hit = false;
-        let hitPos = new Vector3();
-        let prevPos = new Vector3();
-
-        // Raymarch
-        for (let i = 0; i < 10; i += 0.1) {
-          const checkPos = pos.clone().add(dir.clone().multiplyScalar(i));
-          const gridX = Math.round(checkPos.x);
-          const gridY = Math.round(checkPos.y);
-          const gridZ = Math.round(checkPos.z);
-          
-          const key = `${gridX},${gridY},${gridZ}`;
-          if (gameWorld[key]) {
-            hit = true;
-            hitPos.set(gridX, gridY, gridZ);
-            break;
-          }
-          prevPos.set(Math.round(checkPos.x), Math.round(checkPos.y), Math.round(checkPos.z));
-        }
-
-        if (hit) {
-          if (e.button === 2) { // Right click - remove
-            const key = `${hitPos.x},${hitPos.y},${hitPos.z}`;
-            const color = gameWorld[key]?.color || '#ffffff';
-            const shape = gameWorld[key]?.shape || 'cube';
-            removeBlock({ x: hitPos.x, y: hitPos.y, z: hitPos.z });
-            addEffect(hitPos, color, 'remove', shape);
-          } else if (e.button === 0) { // Left click - place
-            placeBlock({
-              x: prevPos.x,
-              y: prevPos.y,
-              z: prevPos.z,
-              color: currentColor,
-              shape: currentShape
-            });
-            addEffect(prevPos, currentColor, 'place', currentShape);
+        if (hit && hit.collider) {
+          const rigidBody = hit.collider.parent();
+          if (rigidBody) {
+            const userData = rigidBody.userData as any;
+            if (userData && userData.isBlock) {
+              const hitPos = new Vector3(userData.x, userData.y, userData.z);
+              
+              if (e.button === 2) { // Right click - remove
+                removeBlock({ x: hitPos.x, y: hitPos.y, z: hitPos.z });
+                addEffect(hitPos, gameWorld[`${hitPos.x},${hitPos.y},${hitPos.z}`]?.color || '#ffffff', 'remove', gameWorld[`${hitPos.x},${hitPos.y},${hitPos.z}`]?.shape);
+              } else if (e.button === 0) { // Left click - place
+                const normal = hit.normal;
+                if (!normal) return;
+                const placePos = new Vector3(
+                  Math.round(hitPos.x + normal.x),
+                  Math.round(hitPos.y + normal.y),
+                  Math.round(hitPos.z + normal.z)
+                );
+                placeBlock({
+                  x: placePos.x,
+                  y: placePos.y,
+                  z: placePos.z,
+                  color: currentColor,
+                  shape: currentShape
+                });
+                addEffect(placePos, currentColor, 'place', currentShape);
+              }
+            }
           }
         } else if (e.button === 0) {
            // Place in air if no hit but within range
-           const placePos = pos.clone().add(dir.clone().multiplyScalar(3));
+           const placePos = rayOrigin.clone().add(rayDir.clone().multiplyScalar(3));
            const finalPos = new Vector3(Math.round(placePos.x), Math.round(placePos.y), Math.round(placePos.z));
            placeBlock({
               x: finalPos.x,
@@ -194,7 +215,7 @@ export function Player() {
 
     window.addEventListener('mousedown', handleMouseClick);
     return () => window.removeEventListener('mousedown', handleMouseClick);
-  }, [camera, phase, gameWorld, currentColor, placeBlock, removeBlock]);
+  }, [camera, phase, gameWorld, currentColor, currentShape, placeBlock, removeBlock, world, rapier]);
 
   // Sync position to server
   useEffect(() => {
