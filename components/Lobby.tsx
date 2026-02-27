@@ -4,7 +4,15 @@ import { useGameStore } from '../store/gameStore';
 export function Lobby() {
   const [roomIdInput, setRoomIdInput] = useState('');
   const [nameInput, setNameInput] = useState('');
-  const { connect, roomId, players, startGame, phase } = useGameStore();
+  const [isConnecting, setIsConnecting] = useState(false);
+  const { connect, roomId, players, startGame, phase, socket } = useGameStore();
+
+  // Reset connecting state if we successfully join
+  if (isConnecting && roomId) {
+    setIsConnecting(false);
+  }
+
+  if (phase !== 'Lobby') return null;
 
   if (roomId) {
     return (
@@ -67,13 +75,23 @@ export function Lobby() {
           <button
             onClick={() => {
               if (nameInput && roomIdInput) {
+                setIsConnecting(true);
                 connect(roomIdInput, nameInput);
+                
+                // Timeout to reset connecting state if it fails
+                setTimeout(() => {
+                  setIsConnecting(false);
+                }, 5000);
               }
             }}
-            disabled={!nameInput || !roomIdInput}
-            className="w-full bg-emerald-500 hover:bg-emerald-600 disabled:bg-zinc-700 disabled:text-zinc-500 text-white font-bold py-3 px-4 rounded-lg transition-colors mt-4"
+            disabled={!nameInput || !roomIdInput || isConnecting}
+            className="w-full bg-emerald-500 hover:bg-emerald-600 disabled:bg-zinc-700 disabled:text-zinc-500 text-white font-bold py-3 px-4 rounded-lg transition-colors mt-4 flex justify-center items-center"
           >
-            Join Room
+            {isConnecting ? (
+              <span className="animate-pulse">Connecting...</span>
+            ) : (
+              'Join Room'
+            )}
           </button>
         </div>
       </div>

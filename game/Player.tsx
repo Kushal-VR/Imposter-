@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useThree, useFrame } from '@react-three/fiber';
 import { useKeyboardControls } from '@react-three/drei';
 import { useGameStore } from '../store/gameStore';
-import { Vector3, Euler, Raycaster } from 'three';
+import { Vector3, Vector2, Euler, Raycaster } from 'three';
 import { RigidBody, CapsuleCollider, useRapier } from '@react-three/rapier';
 
 const SPEED = 5;
@@ -30,10 +30,54 @@ export function Player() {
   }, []);
 
   useEffect(() => {
+    let isDragging = false;
+    let previousTouch: Touch | null = null;
+
+    const handleTouchStart = (e: TouchEvent) => {
+      if (e.touches.length === 1) {
+        isDragging = true;
+        previousTouch = e.touches[0];
+      }
+    };
+
+    const handleTouchMove = (e: TouchEvent) => {
+      if (!isDragging || !previousTouch) return;
+      const touch = e.touches[0];
+      const deltaX = touch.clientX - previousTouch.clientX;
+      const deltaY = touch.clientY - previousTouch.clientY;
+      
+      const euler = new Euler(0, 0, 0, 'YXZ');
+      euler.setFromQuaternion(camera.quaternion);
+      
+      euler.y -= deltaX * 0.005;
+      euler.x -= deltaY * 0.005;
+      euler.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, euler.x));
+      
+      camera.quaternion.setFromEuler(euler);
+      previousTouch = touch;
+    };
+
+    const handleTouchEnd = () => {
+      isDragging = false;
+      previousTouch = null;
+    };
+
+    window.addEventListener('touchstart', handleTouchStart);
+    window.addEventListener('touchmove', handleTouchMove);
+    window.addEventListener('touchend', handleTouchEnd);
+
+    return () => {
+      window.removeEventListener('touchstart', handleTouchStart);
+      window.removeEventListener('touchmove', handleTouchMove);
+      window.removeEventListener('touchend', handleTouchEnd);
+    };
+  }, [camera]);
+
+  useEffect(() => {
     const handleMouseClick = (e: MouseEvent) => {
-      if (document.pointerLockElement && phase === 'Build') {
+      if ((document.pointerLockElement || ('ontouchstart' in window)) && phase === 'Build') {
         const raycaster = new Raycaster();
-        raycaster.setFromCamera({ x: 0, y: 0 }, camera);
+        raycaster.setFromCamera(new Vector2(0, 0), camera);
 
         // Simple raycast against blocks
         // We can do this by checking distance to all blocks, or using Three.js raycaster if we had meshes.

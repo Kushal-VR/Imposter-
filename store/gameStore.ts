@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { io, Socket } from 'socket.io-client';
-import { Player, Block, GamePhase, Room } from '../server/types.ts';
+import { Player, Block, GamePhase, Room } from '../server/types';
 
 interface GameState {
   socket: Socket | null;
@@ -39,14 +39,42 @@ export const useGameStore = create<GameState>((set, get) => ({
   messages: [],
 
   connect: (roomId: string, name: string) => {
-    const socketUrl = process.env.NEXT_PUBLIC_APP_URL || window.location.origin;
-    const socket = io(socketUrl);
+    const currentSocket = get().socket;
+    if (currentSocket) {
+      currentSocket.disconnect();
+    }
 
-    socket.on('connect', () => {
+    console.log('Connecting to room:', roomId, 'as', name);
+    const socketUrl = typeof window !== 'undefined' ? window.location.origin : '';
+    const socket = io(socketUrl, {
+      transports: ['websocket', 'polling']
+    });
+
+    const join = () => {
+      console.log('Socket connected, joining room');
       socket.emit('joinRoom', { roomId, name });
+    };
+
+    if (socket.connected) {
+      join();
+    } else {
+      socket.on('connect', join);
+    }
+
+    socket.on('connect_error', (err) => {
+      console.error('Socket connection error:', err);
+      if (typeof window !== 'undefined') {
+        alert(`Connection Error: ${err.message}`);
+      }
+    });
+
+    socket.on('error', (err: string) => {
+      console.error('Socket error:', err);
+      alert(err);
     });
 
     socket.on('roomState', (room: Room) => {
+      console.log('Received roomState:', room);
       set({
         roomId,
         name,

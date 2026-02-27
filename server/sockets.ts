@@ -1,5 +1,6 @@
 import { Server, Socket } from 'socket.io';
-import { Room, Player, Block } from './types.ts';
+import { Room, Player, Block } from './types';
+import { pool } from './db';
 
 const rooms: Record<string, Room> = {};
 const WORDS = ['Castle', 'Spaceship', 'Pyramid', 'Treehouse', 'Bridge', 'Robot'];
@@ -9,9 +10,11 @@ export function setupSockets(io: Server) {
     console.log('Player connected:', socket.id);
 
     socket.on('joinRoom', ({ roomId, name }) => {
+      console.log(`Player ${socket.id} joining room ${roomId} as ${name}`);
       socket.join(roomId);
       
       if (!rooms[roomId]) {
+        console.log(`Creating room ${roomId}`);
         rooms[roomId] = {
           id: roomId,
           players: {},
@@ -42,6 +45,7 @@ export function setupSockets(io: Server) {
 
       socket.emit('roomState', room);
       socket.to(roomId).emit('playerJoined', room.players[socket.id]);
+      console.log(`Sent roomState to ${socket.id}`);
     });
 
     socket.on('move', (data: { position: [number, number, number], rotation: [number, number, number] }) => {
@@ -117,8 +121,8 @@ export function setupSockets(io: Server) {
 
       const room = rooms[roomId];
       const playerIds = Object.keys(room.players);
-      if (playerIds.length < 2) {
-        socket.emit('error', 'Need at least 2 players to start');
+      if (playerIds.length < 1) {
+        socket.emit('error', 'Need at least 1 player to start');
         return;
       }
 
@@ -181,6 +185,48 @@ export function setupSockets(io: Server) {
         room.phase = 'Result';
         io.to(roomId).emit('phaseChanged', room.phase);
         io.to(roomId).emit('gameEnded', room.votes);
+
+        // Calculate result and save to DB
+        try {
+          let imposterId = '';
+          let imposterName = '';
+          for (const id in room.players) {
+            if (room.players[id].role === 'imposter') {
+              imposterId = id;
+              imposterName = room.players[id].name;
+              break;
+            }
+          }
+
+          if (imposterId) {
+            // Count votes
+            const voteCounts: Record<string, number> = {};
+            for (const voter in room.votes) {
+              const votedFor = room.votes[voter];
+              voteCounts[votedFor] = (voteCounts[votedFor] || 0) + 1;
+            }
+
+            // Find max votes
+            let maxVotes = 0;
+            let mostVotedId = '';
+            for (const id in voteCounts) {
+              if (voteCounts[id] > maxVotes) {
+                maxVotes = voteCounts[id];
+                mostVotedId = id;
+              }
+            }
+
+            // Imposter wins if they are not the most voted
+            const imposterWon = mostVotedId !== imposterId;
+
+            pool.query(
+              'INSERT INTO game_results (room_id, imposter_id, imposter_name, imposter_won) VALUES ($1, $2, $3, $4)',
+              [roomId, imposterId, imposterName, imposterWon]
+            ).catch(err => console.error('Failed to save game result:', err));
+          }
+        } catch (err) {
+          console.error('Error processing game result:', err);
+        }
       }
     });
 

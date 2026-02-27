@@ -6,6 +6,7 @@ import { Physics } from '@react-three/rapier';
 import { useGameStore } from '../store/gameStore';
 import { Lobby } from '../components/Lobby';
 import { GameUI } from '../components/GameUI';
+import { MobileControls } from '../components/MobileControls';
 import { Player } from '../game/Player';
 import { OtherPlayer } from '../game/OtherPlayer';
 import { World } from '../game/World';
@@ -17,6 +18,7 @@ export default function Game() {
     <div className="w-full h-screen bg-black overflow-hidden relative">
       <Lobby />
       <GameUI />
+      <MobileControls />
 
       <KeyboardControls
         map={[
@@ -51,7 +53,7 @@ export default function Game() {
             })}
           </Physics>
 
-          {phase !== 'Lobby' && <PointerLockControls />}
+          {phase === 'Build' && <PointerLockControls />}
         </Canvas>
       </KeyboardControls>
     </div>

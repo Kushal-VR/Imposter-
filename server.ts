@@ -3,7 +3,8 @@ import { createServer } from 'http';
 import { Server } from 'socket.io';
 import next from 'next';
 import { parse } from 'url';
-import { setupSockets } from './server/sockets.ts';
+import { setupSockets } from './server/sockets';
+import { initDb } from './server/db';
 
 const dev = process.env.NODE_ENV !== 'production';
 const app = next({ dev });
@@ -16,6 +17,7 @@ app.prepare().then(() => {
     cors: { origin: '*' }
   });
 
+  initDb();
   setupSockets(io);
 
   server.all(/.*/, (req, res) => {
@@ -26,5 +28,6 @@ app.prepare().then(() => {
   const PORT = process.env.PORT || 3000;
   httpServer.listen(PORT, () => {
     console.log(`> Ready on http://localhost:${PORT}`);
+    console.log(`> Socket.IO server initialized`);
   });
 });
