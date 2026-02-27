@@ -1,11 +1,79 @@
 import { useState } from 'react';
 import { useGameStore } from '../store/gameStore';
 
+function RulesModal({ onClose }: { onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[60] p-4">
+      <div className="bg-zinc-900 p-8 rounded-xl shadow-2xl max-w-2xl w-full border border-zinc-700 max-h-[90vh] overflow-y-auto custom-scrollbar">
+        <h2 className="text-3xl font-bold mb-6 text-emerald-400">How to Play</h2>
+        
+        <div className="space-y-6 text-zinc-300">
+          <section>
+            <h3 className="text-xl font-semibold text-white mb-2">Objective</h3>
+            <p>Work together to build a secret object, but beware—one of you is the Imposter! The Builders must finish the object and identify the Imposter. The Imposter must blend in, sabotage the build, and avoid detection.</p>
+          </section>
+
+          <section>
+            <h3 className="text-xl font-semibold text-white mb-2">Roles</h3>
+            <div className="space-y-4">
+              <div className="bg-zinc-800/50 p-4 rounded-lg border border-zinc-700/50">
+                <h4 className="font-bold text-emerald-400 mb-1">Builders</h4>
+                <ul className="list-disc list-inside space-y-1 text-sm">
+                  <li>You will be given a <span className="font-bold text-white">Secret Word</span> (e.g., "Castle").</li>
+                  <li>Work together to build the object using blocks.</li>
+                  <li>Pay attention to who is building what—the Imposter doesn't know the word!</li>
+                </ul>
+              </div>
+              <div className="bg-zinc-800/50 p-4 rounded-lg border border-zinc-700/50">
+                <h4 className="font-bold text-red-400 mb-1">Imposter</h4>
+                <ul className="list-disc list-inside space-y-1 text-sm">
+                  <li>You <span className="font-bold text-white">do not</span> know the Secret Word.</li>
+                  <li>Try to figure out what the others are building and blend in.</li>
+                  <li>Use your <span className="font-bold text-red-400">Sabotage</span> ability (Press 'E') to destroy nearby blocks and cause chaos.</li>
+                </ul>
+              </div>
+            </div>
+          </section>
+
+          <section>
+            <h3 className="text-xl font-semibold text-white mb-2">Game Phases</h3>
+            <ol className="list-decimal list-inside space-y-2 text-sm">
+              <li><span className="font-bold text-emerald-400">Build Phase (60s):</span> Everyone builds. Imposter can sabotage.</li>
+              <li><span className="font-bold text-blue-400">Discussion Phase (30s):</span> Use the chat to discuss who was acting suspiciously.</li>
+              <li><span className="font-bold text-purple-400">Voting Phase:</span> Vote for who you think the Imposter is.</li>
+            </ol>
+          </section>
+
+          <section>
+            <h3 className="text-xl font-semibold text-white mb-2">Controls</h3>
+            <ul className="list-disc list-inside space-y-1 text-sm">
+              <li><span className="font-mono bg-zinc-800 px-1 rounded">W A S D</span> - Move</li>
+              <li><span className="font-mono bg-zinc-800 px-1 rounded">Space</span> - Jump</li>
+              <li><span className="font-mono bg-zinc-800 px-1 rounded">Left Click</span> - Place Block</li>
+              <li><span className="font-mono bg-zinc-800 px-1 rounded">Right Click</span> - Remove Block</li>
+              <li><span className="font-mono bg-zinc-800 px-1 rounded">1-5</span> - Change Block Color</li>
+              <li><span className="font-mono bg-zinc-800 px-1 rounded">E</span> - Sabotage (Imposter Only)</li>
+            </ul>
+          </section>
+        </div>
+
+        <button
+          onClick={onClose}
+          className="mt-8 w-full bg-zinc-700 hover:bg-zinc-600 text-white font-bold py-3 px-4 rounded-lg transition-colors"
+        >
+          Got it!
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function Lobby() {
   const [roomIdInput, setRoomIdInput] = useState('');
   const [nameInput, setNameInput] = useState('');
   const [isConnecting, setIsConnecting] = useState(false);
-  const { connect, roomId, players, startGame, phase, socket } = useGameStore();
+  const [showRules, setShowRules] = useState(false);
+  const { connect, roomId, players, startGame, phase, socket, toggleReady } = useGameStore();
 
   // Reset connecting state if we successfully join
   if (isConnecting && roomId) {
@@ -15,6 +83,9 @@ export function Lobby() {
   if (phase !== 'Lobby') return null;
 
   if (roomId) {
+    const allReady = Object.values(players).length > 0 && Object.values(players).every(p => p.isReady);
+    const me = (socket && socket.id) ? players[socket.id] : null;
+
     return (
       <div className="absolute inset-0 flex items-center justify-center bg-black/80 text-white z-50">
         <div className="bg-zinc-900 p-8 rounded-xl shadow-2xl max-w-md w-full border border-zinc-800">
@@ -25,21 +96,38 @@ export function Lobby() {
             <ul className="space-y-2">
               {Object.values(players).map(p => (
                 <li key={p.id} className="bg-zinc-800 px-4 py-2 rounded-lg flex items-center justify-between">
-                  <span>{p.name}</span>
-                  <span className="text-xs text-zinc-500">{p.id.slice(0, 4)}</span>
+                  <div className="flex items-center gap-2">
+                    <span className={`w-3 h-3 rounded-full ${p.isReady ? 'bg-emerald-500' : 'bg-red-500'}`}></span>
+                    <span>{p.name}</span>
+                  </div>
+                  <span className="text-xs text-zinc-500">{p.isReady ? 'Ready' : 'Not Ready'}</span>
                 </li>
               ))}
             </ul>
           </div>
 
-          {phase === 'Lobby' && (
+          <div className="flex flex-col gap-3">
             <button
-              onClick={startGame}
-              className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-3 px-4 rounded-lg transition-colors"
+              onClick={toggleReady}
+              className={`w-full font-bold py-3 px-4 rounded-lg transition-colors ${
+                me?.isReady 
+                  ? 'bg-zinc-700 hover:bg-zinc-600 text-white' 
+                  : 'bg-emerald-600 hover:bg-emerald-500 text-white'
+              }`}
             >
-              Start Game
+              {me?.isReady ? 'Unready' : 'Ready Up'}
             </button>
-          )}
+
+            {phase === 'Lobby' && (
+              <button
+                onClick={startGame}
+                disabled={!allReady}
+                className="w-full bg-emerald-500 hover:bg-emerald-600 disabled:bg-zinc-800 disabled:text-zinc-600 text-white font-bold py-3 px-4 rounded-lg transition-colors"
+              >
+                {allReady ? 'Start Game' : 'Waiting for all to be ready...'}
+              </button>
+            )}
+          </div>
         </div>
       </div>
     );
@@ -47,10 +135,19 @@ export function Lobby() {
 
   return (
     <div className="absolute inset-0 flex items-center justify-center bg-zinc-950 text-white z-50">
+      {showRules && <RulesModal onClose={() => setShowRules(false)} />}
       <div className="bg-zinc-900 p-8 rounded-xl shadow-2xl max-w-md w-full border border-zinc-800">
         <h1 className="text-4xl font-bold mb-2 text-center text-emerald-400">Imposter Architect</h1>
-        <p className="text-zinc-400 text-center mb-8">Build together, find the imposter.</p>
+        <p className="text-zinc-400 text-center mb-6">Build together, find the imposter.</p>
         
+        <button 
+          onClick={() => setShowRules(true)}
+          className="w-full bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-semibold py-2 px-4 rounded-lg transition-colors mb-8 text-sm flex items-center justify-center gap-2"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+          How to Play
+        </button>
+
         <div className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-zinc-400 mb-1">Your Name</label>

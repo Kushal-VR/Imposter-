@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { Joystick } from 'react-joystick-component';
 import { useGameStore } from '../store/gameStore';
 
 export function MobileControls() {
   const { phase } = useGameStore();
   const [isMobile, setIsMobile] = useState(false);
+  const keysRef = useRef({ w: false, a: false, s: false, d: false });
 
   useEffect(() => {
     const checkMobile = () => {
@@ -17,33 +18,34 @@ export function MobileControls() {
 
   if (!isMobile || phase === 'Lobby') return null;
 
+  const updateKey = (key: string, code: string, isDown: boolean) => {
+    const state = keysRef.current as any;
+    if (state[key] !== isDown) {
+      state[key] = isDown;
+      document.dispatchEvent(new KeyboardEvent(isDown ? 'keydown' : 'keyup', { code }));
+    }
+  };
+
   const handleMove = (e: any) => {
-    // Dispatch keyboard events to simulate WASD
     const { x, y } = e;
     
-    // Reset all
-    window.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyW' }));
-    window.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyS' }));
-    window.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyA' }));
-    window.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyD' }));
-
-    if (y > 0.5) window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyW' }));
-    if (y < -0.5) window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyS' }));
-    if (x > 0.5) window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyD' }));
-    if (x < -0.5) window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyA' }));
+    updateKey('w', 'KeyW', y > 0.3);
+    updateKey('s', 'KeyS', y < -0.3);
+    updateKey('d', 'KeyD', x > 0.3);
+    updateKey('a', 'KeyA', x < -0.3);
   };
 
   const handleStop = () => {
-    window.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyW' }));
-    window.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyS' }));
-    window.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyA' }));
-    window.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyD' }));
+    updateKey('w', 'KeyW', false);
+    updateKey('s', 'KeyS', false);
+    updateKey('a', 'KeyA', false);
+    updateKey('d', 'KeyD', false);
   };
 
   const handleJump = () => {
-    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'Space' }));
+    document.dispatchEvent(new KeyboardEvent('keydown', { code: 'Space' }));
     setTimeout(() => {
-      window.dispatchEvent(new KeyboardEvent('keyup', { code: 'Space' }));
+      document.dispatchEvent(new KeyboardEvent('keyup', { code: 'Space' }));
     }, 100);
   };
 

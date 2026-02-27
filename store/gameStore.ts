@@ -14,6 +14,10 @@ interface GameState {
   timer: number;
   votes: Record<string, string>;
   messages: { sender: string; message: string }[];
+  lastSabotage: number;
+  imposterId: string | null;
+  currentColor: string;
+  currentShape: 'cube' | 'sphere' | 'cylinder';
   
   connect: (roomId: string, name: string) => void;
   disconnect: () => void;
@@ -24,6 +28,10 @@ interface GameState {
   vote: (votedId: string) => void;
   sendChat: (message: string) => void;
   sabotage: (position: [number, number, number]) => void;
+  toggleReady: () => void;
+  setLastSabotage: (time: number) => void;
+  setCurrentColor: (color: string) => void;
+  setCurrentShape: (shape: 'cube' | 'sphere' | 'cylinder') => void;
 }
 
 export const useGameStore = create<GameState>((set, get) => ({
@@ -38,6 +46,10 @@ export const useGameStore = create<GameState>((set, get) => ({
   timer: 0,
   votes: {},
   messages: [],
+  lastSabotage: 0,
+  imposterId: null,
+  currentColor: '#ef4444',
+  currentShape: 'cube',
 
   connect: (roomId: string, name: string) => {
     const currentSocket = get().socket;
@@ -101,6 +113,19 @@ export const useGameStore = create<GameState>((set, get) => ({
       });
     });
 
+    socket.on('playerReadyStateChanged', (data: { id: string, isReady: boolean }) => {
+      set((state) => {
+        const player = state.players[data.id];
+        if (!player) return state;
+        return {
+          players: {
+            ...state.players,
+            [data.id]: { ...player, isReady: data.isReady }
+          }
+        };
+      });
+    });
+
     socket.on('playerMoved', (data: { id: string, position: [number, number, number], rotation: [number, number, number] }) => {
       set((state) => {
         const player = state.players[data.id];
@@ -146,8 +171,8 @@ export const useGameStore = create<GameState>((set, get) => ({
       }));
     });
 
-    socket.on('gameEnded', (votes: Record<string, string>) => {
-      set({ votes });
+    socket.on('gameEnded', (data: { votes: Record<string, string>, imposterId: string }) => {
+      set({ votes: data.votes, imposterId: data.imposterId });
     });
 
     socket.on('chatMessage', (msg: { sender: string, message: string }) => {
@@ -214,5 +239,24 @@ export const useGameStore = create<GameState>((set, get) => ({
     if (socket) {
       socket.emit('sabotage', position);
     }
+  },
+
+  toggleReady: () => {
+    const { socket } = get();
+    if (socket) {
+      socket.emit('toggleReady');
+    }
+  },
+
+  setLastSabotage: (time) => {
+    set({ lastSabotage: time });
+  },
+
+  setCurrentColor: (color) => {
+    set({ currentColor: color });
+  },
+
+  setCurrentShape: (shape) => {
+    set({ currentShape: shape });
   }
 }));

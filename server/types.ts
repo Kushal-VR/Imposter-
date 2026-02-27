@@ -15,6 +15,7 @@ export interface Block {
   y: number;
   z: number;
   color: string;
+  shape?: 'cube' | 'sphere' | 'cylinder';
 }
 
 export type GamePhase = 'Lobby' | 'Build' | 'Discussion' | 'Voting' | 'Result';

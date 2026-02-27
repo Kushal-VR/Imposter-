@@ -151,6 +151,26 @@ export function setupSockets(io: Server) {
       });
     });
 
+    socket.on('toggleReady', () => {
+      let roomId = null;
+      for (const r in rooms) {
+        if (rooms[r].players[socket.id]) {
+          roomId = r;
+          break;
+        }
+      }
+      if (!roomId) return;
+
+      const player = rooms[roomId].players[socket.id];
+      if (player) {
+        player.isReady = !player.isReady;
+        io.to(roomId).emit('playerReadyStateChanged', {
+          id: socket.id,
+          isReady: player.isReady
+        });
+      }
+    });
+
     socket.on('startGame', () => {
       let roomId = null;
       for (const r in rooms) {
@@ -226,20 +246,21 @@ export function setupSockets(io: Server) {
       if (Object.keys(room.votes).length === Object.keys(room.players).length) {
         room.phase = 'Result';
         io.to(roomId).emit('phaseChanged', room.phase);
-        io.to(roomId).emit('gameEnded', room.votes);
+
+        let imposterId = '';
+        let imposterName = '';
+        for (const id in room.players) {
+          if (room.players[id].role === 'imposter') {
+            imposterId = id;
+            imposterName = room.players[id].name;
+            break;
+          }
+        }
+
+        io.to(roomId).emit('gameEnded', { votes: room.votes, imposterId });
 
         // Calculate result and save to DB
         try {
-          let imposterId = '';
-          let imposterName = '';
-          for (const id in room.players) {
-            if (room.players[id].role === 'imposter') {
-              imposterId = id;
-              imposterName = room.players[id].name;
-              break;
-            }
-          }
-
           if (imposterId) {
             // Count votes
             const voteCounts: Record<string, number> = {};

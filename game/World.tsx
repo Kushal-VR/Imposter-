@@ -6,19 +6,24 @@ export function World() {
 
   return (
     <>
-      {Object.values(world).map((block) => (
-        <RigidBody
-          key={`${block.x},${block.y},${block.z}`}
-          position={[block.x, block.y, block.z]}
-          type="fixed"
-          colliders="cuboid"
-        >
-          <mesh castShadow receiveShadow>
-            <boxGeometry args={[1, 1, 1]} />
-            <meshStandardMaterial color={block.color} />
-          </mesh>
-        </RigidBody>
-      ))}
+      {Object.values(world).map((block) => {
+        const shape = block.shape || 'cube';
+        return (
+          <RigidBody
+            key={`${block.x},${block.y},${block.z}`}
+            position={[block.x, block.y, block.z]}
+            type="fixed"
+            colliders={shape === 'sphere' ? 'ball' : shape === 'cylinder' ? 'hull' : 'cuboid'}
+          >
+            <mesh castShadow receiveShadow>
+              {shape === 'cube' && <boxGeometry args={[1, 1, 1]} />}
+              {shape === 'sphere' && <sphereGeometry args={[0.5, 16, 16]} />}
+              {shape === 'cylinder' && <cylinderGeometry args={[0.5, 0.5, 1, 16]} />}
+              <meshStandardMaterial color={block.color} />
+            </mesh>
+          </RigidBody>
+        );
+      })}
     </>
   );
 }

@@ -2,22 +2,60 @@ import { useEffect, useRef, useState } from 'react';
 import { useThree, useFrame } from '@react-three/fiber';
 import { useKeyboardControls } from '@react-three/drei';
 import { useGameStore } from '../store/gameStore';
-import { Vector3, Vector2, Euler, Raycaster } from 'three';
+import { Vector3, Vector2, Euler, Raycaster, MeshBasicMaterial, BoxGeometry, Mesh } from 'three';
 import { RigidBody, CapsuleCollider, useRapier } from '@react-three/rapier';
 
 const SPEED = 5;
 const JUMP_FORCE = 8;
 const COLORS = ['#ef4444', '#3b82f6', '#eab308', '#a855f7', '#f97316'];
 
+function BlockEffect({ position, color, type, shape = 'cube' }: { position: Vector3, color: string, type: 'place' | 'remove', shape?: 'cube' | 'sphere' | 'cylinder' }) {
+  const meshRef = useRef<Mesh>(null);
+  const [scale, setScale] = useState(type === 'place' ? 0.5 : 1);
+  const [opacity, setOpacity] = useState(1);
+
+  useFrame(() => {
+    if (!meshRef.current) return;
+    if (type === 'place') {
+      setScale(s => Math.min(1.1, s + 0.1));
+      setOpacity(o => Math.max(0, o - 0.05));
+    } else {
+      setScale(s => Math.max(0, s - 0.1));
+      setOpacity(o => Math.max(0, o - 0.1));
+    }
+    meshRef.current.scale.set(scale, scale, scale);
+    (meshRef.current.material as MeshBasicMaterial).opacity = opacity;
+  });
+
+  if (opacity <= 0) return null;
+
+  return (
+    <mesh ref={meshRef} position={position}>
+      {shape === 'cube' && <boxGeometry args={[1.1, 1.1, 1.1]} />}
+      {shape === 'sphere' && <sphereGeometry args={[0.55, 16, 16]} />}
+      {shape === 'cylinder' && <cylinderGeometry args={[0.55, 0.55, 1.1, 16]} />}
+      <meshBasicMaterial color={color} wireframe transparent opacity={opacity} />
+    </mesh>
+  );
+}
+
 export function Player() {
   const { camera } = useThree();
   const { rapier, world } = useRapier();
   const bodyRef = useRef<any>(null);
   const [, getKeys] = useKeyboardControls();
-  const { move, phase, placeBlock, removeBlock, world: gameWorld, role, sabotage } = useGameStore();
+  const { move, phase, placeBlock, removeBlock, world: gameWorld, role, sabotage, lastSabotage, setLastSabotage, currentColor, currentShape, setCurrentColor, setCurrentShape } = useGameStore();
 
-  const [currentColor, setCurrentColor] = useState('#ef4444');
-  const [lastSabotage, setLastSabotage] = useState(0);
+  const [effects, setEffects] = useState<{ id: number, pos: Vector3, color: string, type: 'place' | 'remove', shape?: 'cube' | 'sphere' | 'cylinder' }[]>([]);
+  const handRef = useRef<Mesh>(null);
+
+  const addEffect = (pos: Vector3, color: string, type: 'place' | 'remove', shape?: 'cube' | 'sphere' | 'cylinder') => {
+    const id = Date.now() + Math.random();
+    setEffects(prev => [...prev, { id, pos, color, type, shape }]);
+    setTimeout(() => {
+      setEffects(prev => prev.filter(e => e.id !== id));
+    }, 1000);
+  };
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -25,6 +63,10 @@ export function Player() {
         const index = parseInt(e.key) - 1;
         if (COLORS[index]) setCurrentColor(COLORS[index]);
       }
+      if (e.code === 'KeyZ') setCurrentShape('cube');
+      if (e.code === 'KeyX') setCurrentShape('sphere');
+      if (e.code === 'KeyC') setCurrentShape('cylinder');
+      
       if (e.code === 'KeyE' && role === 'imposter' && phase === 'Build') {
         const now = Date.now();
         if (now - lastSabotage > 5000) { // 5 second cooldown
@@ -119,24 +161,33 @@ export function Player() {
 
         if (hit) {
           if (e.button === 2) { // Right click - remove
+            const key = `${hitPos.x},${hitPos.y},${hitPos.z}`;
+            const color = gameWorld[key]?.color || '#ffffff';
+            const shape = gameWorld[key]?.shape || 'cube';
             removeBlock({ x: hitPos.x, y: hitPos.y, z: hitPos.z });
+            addEffect(hitPos, color, 'remove', shape);
           } else if (e.button === 0) { // Left click - place
             placeBlock({
               x: prevPos.x,
               y: prevPos.y,
               z: prevPos.z,
-              color: currentColor
+              color: currentColor,
+              shape: currentShape
             });
+            addEffect(prevPos, currentColor, 'place', currentShape);
           }
         } else if (e.button === 0) {
            // Place in air if no hit but within range
            const placePos = pos.clone().add(dir.clone().multiplyScalar(3));
+           const finalPos = new Vector3(Math.round(placePos.x), Math.round(placePos.y), Math.round(placePos.z));
            placeBlock({
-              x: Math.round(placePos.x),
-              y: Math.round(placePos.y),
-              z: Math.round(placePos.z),
-              color: currentColor
+              x: finalPos.x,
+              y: finalPos.y,
+              z: finalPos.z,
+              color: currentColor,
+              shape: currentShape
             });
+            addEffect(finalPos, currentColor, 'place', currentShape);
         }
       }
     };
@@ -189,11 +240,30 @@ export function Player() {
     // Update camera position
     const pos = bodyRef.current.translation();
     camera.position.set(pos.x, pos.y + 0.8, pos.z); // Eye level
+
+    if (handRef.current) {
+      handRef.current.position.copy(camera.position);
+      handRef.current.rotation.copy(camera.rotation);
+      handRef.current.translateZ(-1.5);
+      handRef.current.translateX(0.8);
+      handRef.current.translateY(-0.5);
+    }
   });
 
   return (
-    <RigidBody ref={bodyRef} colliders={false} mass={1} type="dynamic" position={[0, 5, 0]} enabledRotations={[false, false, false]}>
-      <CapsuleCollider args={[0.5, 0.5]} />
-    </RigidBody>
+    <>
+      <RigidBody ref={bodyRef} colliders={false} mass={1} type="dynamic" position={[0, 5, 0]} enabledRotations={[false, false, false]}>
+        <CapsuleCollider args={[0.5, 0.5]} />
+      </RigidBody>
+      {effects.map(effect => (
+        <BlockEffect key={effect.id} position={effect.pos} color={effect.color} type={effect.type} />
+      ))}
+      <mesh ref={handRef} scale={[0.3, 0.3, 0.3]}>
+        {currentShape === 'cube' && <boxGeometry args={[1, 1, 1]} />}
+        {currentShape === 'sphere' && <sphereGeometry args={[0.5, 16, 16]} />}
+        {currentShape === 'cylinder' && <cylinderGeometry args={[0.5, 0.5, 1, 16]} />}
+        <meshStandardMaterial color={currentColor} />
+      </mesh>
+    </>
   );
 }
