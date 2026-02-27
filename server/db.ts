@@ -1,6 +1,10 @@
 import { Pool } from 'pg';
 
-const connectionString = process.env.DATABASE_URL || 'postgresql://postgres:6Kp7_7VsEuD,/ET@db.soywnjuyltvoxykmohle.supabase.co:5432/postgres';
+const connectionString = process.env.DATABASE_URL;
+
+if (!connectionString) {
+  console.warn('DATABASE_URL is not set. Database connection will fail.');
+}
 
 export const pool = new Pool({
   connectionString,
