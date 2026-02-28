@@ -1,21 +1,16 @@
 import { Pool } from 'pg';
 
-const connectionString = process.env.DATABASE_URL;
-
+// Private pool instance — use getPool() instead of importing pool directly,
+// since initDb() runs asynchronously after module load.
 let poolInstance: Pool | null = null;
 
-if (connectionString && connectionString.startsWith('postgres')) {
-  poolInstance = new Pool({
-    connectionString,
-    ssl: {
-      rejectUnauthorized: false
-    }
-  });
-} else {
-  console.warn('DATABASE_URL is not set or invalid. Database features will be disabled.');
+/**
+ * Returns the active pool, or null if the database is not configured.
+ * Safe to call before initDb() resolves — callers should check for null.
+ */
+export function getPool(): Pool | null {
+  return poolInstance;
 }
-
-export const pool = poolInstance;
 
 export async function query(text: string, params?: any[]) {
   if (!poolInstance) {
@@ -25,10 +20,24 @@ export async function query(text: string, params?: any[]) {
   return poolInstance.query(text, params);
 }
 
-// Initialize tables if they don't exist
+/** Initialize the connection pool and create tables if needed. */
 export async function initDb() {
-  if (!poolInstance) return;
-  
+  const connectionString = process.env.DATABASE_URL;
+
+  if (connectionString && connectionString.startsWith('postgres')) {
+    poolInstance = new Pool({
+      connectionString,
+      ssl: {
+        rejectUnauthorized: false,
+      },
+    });
+  } else {
+    console.warn(
+      'DATABASE_URL is not set or invalid. Database features will be disabled.'
+    );
+    return;
+  }
+
   try {
     await poolInstance.query(`
       CREATE TABLE IF NOT EXISTS game_results (

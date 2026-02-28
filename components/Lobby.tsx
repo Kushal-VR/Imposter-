@@ -6,7 +6,7 @@ function RulesModal({ onClose }: { onClose: () => void }) {
     <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[60] p-4">
       <div className="bg-zinc-900 p-8 rounded-xl shadow-2xl max-w-2xl w-full border border-zinc-700 max-h-[90vh] overflow-y-auto custom-scrollbar">
         <h2 className="text-3xl font-bold mb-6 text-emerald-400">How to Play</h2>
-        
+
         <div className="space-y-6 text-zinc-300">
           <section>
             <h3 className="text-xl font-semibold text-white mb-2">Objective</h3>
@@ -46,14 +46,34 @@ function RulesModal({ onClose }: { onClose: () => void }) {
 
           <section>
             <h3 className="text-xl font-semibold text-white mb-2">Controls</h3>
-            <ul className="list-disc list-inside space-y-1 text-sm">
-              <li><span className="font-mono bg-zinc-800 px-1 rounded">W A S D</span> - Move</li>
-              <li><span className="font-mono bg-zinc-800 px-1 rounded">Space</span> - Jump</li>
-              <li><span className="font-mono bg-zinc-800 px-1 rounded">Left Click</span> - Place Block</li>
-              <li><span className="font-mono bg-zinc-800 px-1 rounded">Right Click</span> - Remove Block</li>
-              <li><span className="font-mono bg-zinc-800 px-1 rounded">1-5</span> - Change Block Color</li>
-              <li><span className="font-mono bg-zinc-800 px-1 rounded">E</span> - Sabotage (Imposter Only)</li>
-            </ul>
+            <div className="space-y-4">
+              <div>
+                <h4 className="text-sm font-bold text-zinc-400 uppercase tracking-wider mb-2">Movement</h4>
+                <ul className="list-disc list-inside space-y-1 text-sm">
+                  <li><span className="font-mono bg-zinc-800 px-1 rounded">W A S D</span> — Move</li>
+                  <li><span className="font-mono bg-zinc-800 px-1 rounded">Space</span> — Jump</li>
+                  <li><span className="font-mono bg-zinc-800 px-1 rounded">Mouse</span> — Look around (click canvas first to lock)</li>
+                </ul>
+              </div>
+              <div>
+                <h4 className="text-sm font-bold text-zinc-400 uppercase tracking-wider mb-2">Building</h4>
+                <ul className="list-disc list-inside space-y-1 text-sm">
+                  <li><span className="font-mono bg-zinc-800 px-1 rounded">Left Click</span> — Place block</li>
+                  <li><span className="font-mono bg-zinc-800 px-1 rounded">Right Click</span> — Remove block</li>
+                  <li><span className="font-mono bg-zinc-800 px-1 rounded">F</span> — <span className="text-emerald-400 font-bold">Repaint &amp; reshape</span> the block you&apos;re looking at (applies current color + shape)</li>
+                  <li><span className="font-mono bg-zinc-800 px-1 rounded">1 – 5</span> — Change block color</li>
+                  <li><span className="font-mono bg-zinc-800 px-1 rounded">Z</span> — Cube shape</li>
+                  <li><span className="font-mono bg-zinc-800 px-1 rounded">X</span> — Sphere shape</li>
+                  <li><span className="font-mono bg-zinc-800 px-1 rounded">C</span> — Cylinder shape</li>
+                </ul>
+              </div>
+              <div>
+                <h4 className="text-sm font-bold text-red-400 uppercase tracking-wider mb-2">Imposter Only</h4>
+                <ul className="list-disc list-inside space-y-1 text-sm">
+                  <li><span className="font-mono bg-zinc-800 px-1 rounded">E</span> — Sabotage (destroys nearby blocks, 5s cooldown)</li>
+                </ul>
+              </div>
+            </div>
           </section>
         </div>
 
@@ -82,16 +102,22 @@ export function Lobby() {
   const [copySuccess, setCopySuccess] = useState(false);
   const { connect, roomId, players, startGame, phase, socket, toggleReady } = useGameStore();
 
-  // Reset connecting state if we successfully join
-  if (isConnecting && roomId) {
-    setIsConnecting(false);
-  }
+  // Reset connecting state when we successfully join a room.
+  // This is done in a useEffect instead of directly during render to avoid
+  // the "Cannot update state during render" warning in React Strict Mode.
+  useEffect(() => {
+    if (isConnecting && roomId) {
+      setIsConnecting(false);
+    }
+  }, [isConnecting, roomId]);
 
   if (phase !== 'Lobby') return null;
 
   if (roomId) {
-    const allReady = Object.values(players).length > 0 && Object.values(players).every(p => p.isReady);
-    const me = (socket && socket.id) ? players[socket.id] : null;
+    const allReady =
+      Object.values(players).length > 0 &&
+      Object.values(players).every((p) => p.isReady);
+    const me = socket?.id ? players[socket.id] : null;
 
     const copyInviteLink = () => {
       const url = new URL(window.location.href);
@@ -106,7 +132,7 @@ export function Lobby() {
         <div className="bg-zinc-900 p-8 rounded-xl shadow-2xl max-w-md w-full border border-zinc-800">
           <div className="flex justify-between items-center mb-6">
             <h2 className="text-3xl font-bold text-emerald-400">Room: {roomId}</h2>
-            <button 
+            <button
               onClick={copyInviteLink}
               className={`p-2 rounded-lg transition-all ${copySuccess ? 'bg-emerald-500 text-white' : 'bg-zinc-800 text-zinc-400 hover:text-white'}`}
               title="Copy Invite Link"
@@ -118,11 +144,13 @@ export function Lobby() {
               )}
             </button>
           </div>
-          
+
           <div className="mb-6">
-            <h3 className="text-xl font-semibold mb-3 text-zinc-300">Players ({Object.keys(players).length}/8)</h3>
+            <h3 className="text-xl font-semibold mb-3 text-zinc-300">
+              Players ({Object.keys(players).length}/8)
+            </h3>
             <ul className="space-y-2">
-              {Object.values(players).map(p => (
+              {Object.values(players).map((p) => (
                 <li key={p.id} className="bg-zinc-800 px-4 py-2 rounded-lg flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <span className={`w-3 h-3 rounded-full ${p.isReady ? 'bg-emerald-500' : 'bg-red-500'}`}></span>
@@ -137,24 +165,18 @@ export function Lobby() {
           <div className="flex flex-col gap-3">
             <button
               onClick={toggleReady}
-              className={`w-full font-bold py-3 px-4 rounded-lg transition-colors ${
-                me?.isReady 
-                  ? 'bg-zinc-700 hover:bg-zinc-600 text-white' 
-                  : 'bg-emerald-600 hover:bg-emerald-500 text-white'
-              }`}
+              className={`w-full font-bold py-3 px-4 rounded-lg transition-colors ${me?.isReady ? 'bg-zinc-700 hover:bg-zinc-600 text-white' : 'bg-emerald-600 hover:bg-emerald-500 text-white'}`}
             >
               {me?.isReady ? 'Unready' : 'Ready Up'}
             </button>
 
-            {phase === 'Lobby' && (
-              <button
-                onClick={startGame}
-                disabled={!allReady}
-                className="w-full bg-emerald-500 hover:bg-emerald-600 disabled:bg-zinc-800 disabled:text-zinc-600 text-white font-bold py-3 px-4 rounded-lg transition-colors"
-              >
-                {allReady ? 'Start Game' : 'Waiting for all to be ready...'}
-              </button>
-            )}
+            <button
+              onClick={startGame}
+              disabled={!allReady}
+              className="w-full bg-emerald-500 hover:bg-emerald-600 disabled:bg-zinc-800 disabled:text-zinc-600 text-white font-bold py-3 px-4 rounded-lg transition-colors"
+            >
+              {allReady ? 'Start Game' : 'Waiting for all to be ready...'}
+            </button>
           </div>
         </div>
       </div>
@@ -167,8 +189,8 @@ export function Lobby() {
       <div className="bg-zinc-900 p-8 rounded-xl shadow-2xl max-w-md w-full border border-zinc-800">
         <h1 className="text-4xl font-bold mb-2 text-center text-emerald-400">Imposter Architect</h1>
         <p className="text-zinc-400 text-center mb-6">Build together, find the imposter.</p>
-        
-        <button 
+
+        <button
           onClick={() => setShowRules(true)}
           className="w-full bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-semibold py-2 px-4 rounded-lg transition-colors mb-8 text-sm flex items-center justify-center gap-2"
         >
@@ -182,9 +204,10 @@ export function Lobby() {
             <input
               type="text"
               value={nameInput}
-              onChange={e => setNameInput(e.target.value)}
+              onChange={(e) => setNameInput(e.target.value)}
               className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-emerald-500 transition-colors"
               placeholder="Enter your name"
+              maxLength={24}
             />
           </div>
           <div>
@@ -192,9 +215,10 @@ export function Lobby() {
             <input
               type="text"
               value={roomIdInput}
-              onChange={e => setRoomIdInput(e.target.value)}
+              onChange={(e) => setRoomIdInput(e.target.value)}
               className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-emerald-500 transition-colors"
               placeholder="Enter room code"
+              maxLength={20}
             />
           </div>
           <button
@@ -202,8 +226,8 @@ export function Lobby() {
               if (nameInput && roomIdInput) {
                 setIsConnecting(true);
                 connect(roomIdInput, nameInput);
-                
-                // Timeout to reset connecting state if it fails
+
+                // Failsafe: reset connecting state if server never responds
                 setTimeout(() => {
                   setIsConnecting(false);
                 }, 5000);

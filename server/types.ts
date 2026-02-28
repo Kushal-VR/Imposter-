@@ -16,6 +16,8 @@ export interface Block {
   z: number;
   color: string;
   shape?: 'cube' | 'sphere' | 'cylinder';
+  /** Visual + physics scale. 1 = full voxel (default), 0.5 = carved half-block. */
+  size?: number;
 }
 
 export type GamePhase = 'Lobby' | 'Build' | 'Discussion' | 'Voting' | 'Result';

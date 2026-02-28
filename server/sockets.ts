@@ -1,18 +1,91 @@
 import { Server, Socket } from 'socket.io';
 import { Room, Player, Block } from './types';
 import { query } from './db';
+import {
+  WORDS,
+  BUILD_DURATION,
+  DISCUSSION_DURATION,
+  SABOTAGE_RADIUS,
+  MIN_PLAYERS_TO_START,
+} from '../lib/constants';
 
+// ─── In-memory game state ────────────────────────────────────────────────────
 const rooms: Record<string, Room> = {};
-const WORDS = ['Castle', 'Spaceship', 'Pyramid', 'Treehouse', 'Bridge', 'Robot'];
+
+/**
+ * Reverse index: socket.id → roomId.
+ * Eliminates the O(n) scan that was repeated in every event handler, turning
+ * room lookup from O(rooms × players) to O(1).
+ */
+const socketToRoom: Record<string, string> = {};
+
+/** Per-room interval handles, keyed by roomId. Cleared on room destruction. */
+const roomIntervals: Record<string, ReturnType<typeof setInterval>[]> = {};
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+/** Returns the roomId for a given socket, or null if not in any room. */
+function getRoomId(socketId: string): string | null {
+  return socketToRoom[socketId] ?? null;
+}
+
+/** Cancel & remove all timers for a room to prevent memory leaks. */
+function clearRoomIntervals(roomId: string): void {
+  if (roomIntervals[roomId]) {
+    roomIntervals[roomId].forEach(clearInterval);
+    delete roomIntervals[roomId];
+  }
+}
+
+/** Register a timer for a room so it can be cancelled on cleanup. */
+function addRoomInterval(
+  roomId: string,
+  handle: ReturnType<typeof setInterval>
+): void {
+  if (!roomIntervals[roomId]) roomIntervals[roomId] = [];
+  roomIntervals[roomId].push(handle);
+}
+
+/** Destroy a room and clean up all associated state. */
+function destroyRoom(io: Server, roomId: string): void {
+  clearRoomIntervals(roomId);
+  const room = rooms[roomId];
+  if (room) {
+    // Remove all socket→room mappings for this room
+    for (const playerId of Object.keys(room.players)) {
+      delete socketToRoom[playerId];
+    }
+    delete rooms[roomId];
+    console.log(`Room ${roomId} destroyed`);
+  }
+}
+
+/** Sanitize user-supplied strings to prevent XSS/spam. */
+function sanitize(str: unknown, maxLength = 50): string {
+  if (typeof str !== 'string') return '';
+  return str.replace(/[<>"'`]/g, '').trim().slice(0, maxLength);
+}
+
+// ─── Socket setup ────────────────────────────────────────────────────────────
 
 export function setupSockets(io: Server) {
   io.on('connection', (socket: Socket) => {
     console.log('Player connected:', socket.id);
 
-    socket.on('joinRoom', ({ roomId, name }) => {
+    // ── joinRoom ──────────────────────────────────────────────────────────────
+    socket.on('joinRoom', ({ roomId: rawRoomId, name: rawName }) => {
+      const roomId = sanitize(rawRoomId, 20);
+      const name = sanitize(rawName, 24);
+
+      if (!roomId || !name) {
+        socket.emit('gameError', 'Invalid room ID or name.');
+        return;
+      }
+
       console.log(`Player ${socket.id} joining room ${roomId} as ${name}`);
       socket.join(roomId);
-      
+      socketToRoom[socket.id] = roomId;
+
       if (!rooms[roomId]) {
         console.log(`Creating room ${roomId}`);
         rooms[roomId] = {
@@ -42,37 +115,32 @@ export function setupSockets(io: Server) {
       console.log(`Sent roomState to ${socket.id}`);
     });
 
-    socket.on('move', (data: { position: [number, number, number], rotation: [number, number, number] }) => {
-      let roomId = null;
-      for (const r in rooms) {
-        if (rooms[r].players[socket.id]) {
-          roomId = r;
-          break;
+    // ── move ──────────────────────────────────────────────────────────────────
+    socket.on(
+      'move',
+      (data: {
+        position: [number, number, number];
+        rotation: [number, number, number];
+      }) => {
+        const roomId = getRoomId(socket.id);
+        if (!roomId) return;
+
+        const player = rooms[roomId].players[socket.id];
+        if (player) {
+          player.position = data.position;
+          player.rotation = data.rotation;
+          socket.to(roomId).emit('playerMoved', {
+            id: socket.id,
+            position: data.position,
+            rotation: data.rotation,
+          });
         }
       }
-      if (!roomId) return;
+    );
 
-      const player = rooms[roomId].players[socket.id];
-      if (player) {
-        player.position = data.position;
-        player.rotation = data.rotation;
-        // Broadcast to others
-        socket.to(roomId).emit('playerMoved', {
-          id: socket.id,
-          position: data.position,
-          rotation: data.rotation
-        });
-      }
-    });
-
+    // ── placeBlock ────────────────────────────────────────────────────────────
     socket.on('placeBlock', (block: Block) => {
-      let roomId = null;
-      for (const r in rooms) {
-        if (rooms[r].players[socket.id]) {
-          roomId = r;
-          break;
-        }
-      }
+      const roomId = getRoomId(socket.id);
       if (!roomId) return;
 
       const room = rooms[roomId];
@@ -83,14 +151,9 @@ export function setupSockets(io: Server) {
       io.to(roomId).emit('blockPlaced', block);
     });
 
-    socket.on('removeBlock', (pos: { x: number, y: number, z: number }) => {
-      let roomId = null;
-      for (const r in rooms) {
-        if (rooms[r].players[socket.id]) {
-          roomId = r;
-          break;
-        }
-      }
+    // ── removeBlock ───────────────────────────────────────────────────────────
+    socket.on('removeBlock', (pos: { x: number; y: number; z: number }) => {
+      const roomId = getRoomId(socket.id);
       if (!roomId) return;
 
       const room = rooms[roomId];
@@ -103,14 +166,9 @@ export function setupSockets(io: Server) {
       }
     });
 
+    // ── updateBlock ───────────────────────────────────────────────────────────
     socket.on('updateBlock', (block: Block) => {
-      let roomId = null;
-      for (const r in rooms) {
-        if (rooms[r].players[socket.id]) {
-          roomId = r;
-          break;
-        }
-      }
+      const roomId = getRoomId(socket.id);
       if (!roomId) return;
 
       const room = rooms[roomId];
@@ -123,56 +181,43 @@ export function setupSockets(io: Server) {
       }
     });
 
+    // ── sabotage ──────────────────────────────────────────────────────────────
     socket.on('sabotage', (position: [number, number, number]) => {
-      let roomId = null;
-      for (const r in rooms) {
-        if (rooms[r].players[socket.id]) {
-          roomId = r;
-          break;
-        }
-      }
+      const roomId = getRoomId(socket.id);
       if (!roomId) return;
 
       const room = rooms[roomId];
       const player = room.players[socket.id];
-      
-      if (room.phase !== 'Build' || player.role !== 'imposter') return;
 
-      const radius = 3;
+      if (room.phase !== 'Build' || player?.role !== 'imposter') return;
+
       const [px, py, pz] = position;
-      
-      const blocksToRemove: {x: number, y: number, z: number}[] = [];
+      const blocksToRemove: { x: number; y: number; z: number }[] = [];
 
       for (const key in room.world) {
         const block = room.world[key];
-        // Don't destroy the floor (y = -1)
+        // Never destroy the floor (y === -1)
         if (block.y === -1) continue;
 
         const dx = block.x - px;
         const dy = block.y - py;
         const dz = block.z - pz;
-        const distance = Math.sqrt(dx*dx + dy*dy + dz*dz);
 
-        if (distance <= radius) {
+        if (dx * dx + dy * dy + dz * dz <= SABOTAGE_RADIUS * SABOTAGE_RADIUS) {
           blocksToRemove.push({ x: block.x, y: block.y, z: block.z });
         }
       }
 
-      blocksToRemove.forEach(pos => {
+      blocksToRemove.forEach((pos) => {
         const key = `${pos.x},${pos.y},${pos.z}`;
         delete room.world[key];
         io.to(roomId).emit('blockRemoved', pos);
       });
     });
 
+    // ── toggleReady ───────────────────────────────────────────────────────────
     socket.on('toggleReady', () => {
-      let roomId = null;
-      for (const r in rooms) {
-        if (rooms[r].players[socket.id]) {
-          roomId = r;
-          break;
-        }
-      }
+      const roomId = getRoomId(socket.id);
       if (!roomId) return;
 
       const player = rooms[roomId].players[socket.id];
@@ -180,84 +225,109 @@ export function setupSockets(io: Server) {
         player.isReady = !player.isReady;
         io.to(roomId).emit('playerReadyStateChanged', {
           id: socket.id,
-          isReady: player.isReady
+          isReady: player.isReady,
         });
       }
     });
 
+    // ── startGame ─────────────────────────────────────────────────────────────
     socket.on('startGame', () => {
-      let roomId = null;
-      for (const r in rooms) {
-        if (rooms[r].players[socket.id]) {
-          roomId = r;
-          break;
-        }
-      }
+      const roomId = getRoomId(socket.id);
       if (!roomId) return;
 
       const room = rooms[roomId];
       const playerIds = Object.keys(room.players);
-      if (playerIds.length < 1) {
-        socket.emit('error', 'Need at least 1 player to start');
+
+      // Require at least 2 players so there can be one builder and one imposter
+      if (playerIds.length < MIN_PLAYERS_TO_START) {
+        socket.emit(
+          'gameError',
+          `Need at least ${MIN_PLAYERS_TO_START} players to start`
+        );
         return;
       }
 
       room.phase = 'Build';
       room.secretWord = WORDS[Math.floor(Math.random() * WORDS.length)];
-      
-      const imposterId = playerIds[Math.floor(Math.random() * playerIds.length)];
-      
-      playerIds.forEach(id => {
+
+      const imposterId =
+        playerIds[Math.floor(Math.random() * playerIds.length)];
+
+      playerIds.forEach((id) => {
         room.players[id].role = id === imposterId ? 'imposter' : 'builder';
         io.to(id).emit('gameStarted', {
           phase: room.phase,
           role: room.players[id].role,
-          secretWord: id === imposterId ? null : room.secretWord
+          secretWord: id === imposterId ? null : room.secretWord,
         });
       });
 
-      // Simple timer for build phase (e.g., 60 seconds)
-      room.timer = 60;
-      const interval = setInterval(() => {
+      // ── Build phase timer ────────────────────────────────────────────────
+      room.timer = BUILD_DURATION;
+
+      const buildInterval = setInterval(() => {
+        // Guard: room may have been destroyed mid-timer
+        if (!rooms[roomId]) {
+          clearInterval(buildInterval);
+          return;
+        }
+
         room.timer--;
         io.to(roomId).emit('timerUpdate', room.timer);
+
         if (room.timer <= 0) {
-          clearInterval(interval);
+          clearInterval(buildInterval);
+
+          // ── Discussion phase timer ───────────────────────────────────────
           room.phase = 'Discussion';
           io.to(roomId).emit('phaseChanged', room.phase);
-          
-          // Discussion timer
-          room.timer = 30;
+          room.timer = DISCUSSION_DURATION;
+
           const discInterval = setInterval(() => {
+            if (!rooms[roomId]) {
+              clearInterval(discInterval);
+              return;
+            }
+
             room.timer--;
             io.to(roomId).emit('timerUpdate', room.timer);
+
             if (room.timer <= 0) {
               clearInterval(discInterval);
               room.phase = 'Voting';
               io.to(roomId).emit('phaseChanged', room.phase);
             }
           }, 1000);
+
+          addRoomInterval(roomId, discInterval);
         }
       }, 1000);
+
+      addRoomInterval(roomId, buildInterval);
     });
 
+    // ── vote ──────────────────────────────────────────────────────────────────
     socket.on('vote', (votedId: string) => {
-      let roomId = null;
-      for (const r in rooms) {
-        if (rooms[r].players[socket.id]) {
-          roomId = r;
-          break;
-        }
-      }
+      const roomId = getRoomId(socket.id);
       if (!roomId) return;
 
       const room = rooms[roomId];
       if (room.phase !== 'Voting') return;
 
+      // Prevent double-voting
+      if (room.votes[socket.id]) return;
+
+      // Validate that votedId is an actual player in this room
+      if (!room.players[votedId]) return;
+
       room.votes[socket.id] = votedId;
       io.to(roomId).emit('voteCast', { voterId: socket.id, votedId });
 
-      if (Object.keys(room.votes).length === Object.keys(room.players).length) {
+      // Check if ALL remaining/connected players have voted
+      const activePlayers = Object.keys(room.players);
+      const voteCount = Object.keys(room.votes).length;
+
+      if (voteCount >= activePlayers.length) {
         room.phase = 'Result';
         io.to(roomId).emit('phaseChanged', room.phase);
 
@@ -273,65 +343,62 @@ export function setupSockets(io: Server) {
 
         io.to(roomId).emit('gameEnded', { votes: room.votes, imposterId });
 
-        // Calculate result and save to DB
-        try {
-          if (imposterId) {
-            // Count votes
-            const voteCounts: Record<string, number> = {};
-            for (const voter in room.votes) {
-              const votedFor = room.votes[voter];
-              voteCounts[votedFor] = (voteCounts[votedFor] || 0) + 1;
-            }
-
-            // Find max votes
-            let maxVotes = 0;
-            let mostVotedId = '';
-            for (const id in voteCounts) {
-              if (voteCounts[id] > maxVotes) {
-                maxVotes = voteCounts[id];
-                mostVotedId = id;
-              }
-            }
-
-            // Imposter wins if they are not the most voted
-            const imposterWon = mostVotedId !== imposterId;
-
-            query(
-              'INSERT INTO game_results (room_id, imposter_id, imposter_name, imposter_won) VALUES ($1, $2, $3, $4)',
-              [roomId, imposterId, imposterName, imposterWon]
-            ).catch(err => console.error('Failed to save game result:', err));
+        // Save result to DB (non-blocking)
+        if (imposterId) {
+          const voteCounts: Record<string, number> = {};
+          for (const votedFor of Object.values(room.votes)) {
+            voteCounts[votedFor] = (voteCounts[votedFor] || 0) + 1;
           }
-        } catch (err) {
-          console.error('Error processing game result:', err);
+
+          let maxVotes = 0;
+          let mostVotedId = '';
+          for (const [id, count] of Object.entries(voteCounts)) {
+            if (count > maxVotes) {
+              maxVotes = count;
+              mostVotedId = id;
+            }
+          }
+
+          const imposterWon = mostVotedId !== imposterId;
+
+          query(
+            'INSERT INTO game_results (room_id, imposter_id, imposter_name, imposter_won) VALUES ($1, $2, $3, $4)',
+            [roomId, imposterId, imposterName, imposterWon]
+          ).catch((err) => console.error('Failed to save game result:', err));
         }
       }
     });
 
-    socket.on('chat', (message: string) => {
-      let roomId = null;
-      for (const r in rooms) {
-        if (rooms[r].players[socket.id]) {
-          roomId = r;
-          break;
-        }
-      }
+    // ── chat ──────────────────────────────────────────────────────────────────
+    socket.on('chat', (rawMessage: unknown) => {
+      const roomId = getRoomId(socket.id);
       if (!roomId) return;
+
+      const message = sanitize(rawMessage, 200);
+      if (!message) return;
 
       const player = rooms[roomId].players[socket.id];
       io.to(roomId).emit('chatMessage', { sender: player.name, message });
     });
 
+    // ── disconnect ────────────────────────────────────────────────────────────
     socket.on('disconnect', () => {
       console.log('Player disconnected:', socket.id);
-      for (const roomId in rooms) {
-        if (rooms[roomId].players[socket.id]) {
-          delete rooms[roomId].players[socket.id];
-          io.to(roomId).emit('playerLeft', socket.id);
-          if (Object.keys(rooms[roomId].players).length === 0) {
-            delete rooms[roomId];
-          }
-          break;
-        }
+
+      const roomId = getRoomId(socket.id);
+      if (!roomId) return;
+
+      // Clean up reverse index
+      delete socketToRoom[socket.id];
+
+      const room = rooms[roomId];
+      if (!room) return;
+
+      delete room.players[socket.id];
+      io.to(roomId).emit('playerLeft', socket.id);
+
+      if (Object.keys(room.players).length === 0) {
+        destroyRoom(io, roomId);
       }
     });
   });
