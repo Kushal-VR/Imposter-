@@ -1,3 +1,7 @@
+import { loadEnvConfig } from '@next/env';
+const projectDir = process.cwd();
+loadEnvConfig(projectDir);
+
 import express from 'express';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
