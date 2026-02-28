@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useGameStore } from '../store/gameStore';
 
 function RulesModal({ onClose }: { onClose: () => void }) {
@@ -19,9 +19,9 @@ function RulesModal({ onClose }: { onClose: () => void }) {
               <div className="bg-zinc-800/50 p-4 rounded-lg border border-zinc-700/50">
                 <h4 className="font-bold text-emerald-400 mb-1">Builders</h4>
                 <ul className="list-disc list-inside space-y-1 text-sm">
-                  <li>You will be given a <span className="font-bold text-white">Secret Word</span> (e.g., "Castle").</li>
+                  <li>You will be given a <span className="font-bold text-white">Secret Word</span> (e.g., &quot;Castle&quot;).</li>
                   <li>Work together to build the object using blocks.</li>
-                  <li>Pay attention to who is building what—the Imposter doesn't know the word!</li>
+                  <li>Pay attention to who is building what&mdash;the Imposter doesn&apos;t know the word!</li>
                 </ul>
               </div>
               <div className="bg-zinc-800/50 p-4 rounded-lg border border-zinc-700/50">
@@ -29,7 +29,7 @@ function RulesModal({ onClose }: { onClose: () => void }) {
                 <ul className="list-disc list-inside space-y-1 text-sm">
                   <li>You <span className="font-bold text-white">do not</span> know the Secret Word.</li>
                   <li>Try to figure out what the others are building and blend in.</li>
-                  <li>Use your <span className="font-bold text-red-400">Sabotage</span> ability (Press 'E') to destroy nearby blocks and cause chaos.</li>
+                  <li>Use your <span className="font-bold text-red-400">Sabotage</span> ability (Press &apos;E&apos;) to destroy nearby blocks and cause chaos.</li>
                 </ul>
               </div>
             </div>
@@ -69,10 +69,17 @@ function RulesModal({ onClose }: { onClose: () => void }) {
 }
 
 export function Lobby() {
-  const [roomIdInput, setRoomIdInput] = useState('');
+  const [roomIdInput, setRoomIdInput] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      return params.get('room') || '';
+    }
+    return '';
+  });
   const [nameInput, setNameInput] = useState('');
   const [isConnecting, setIsConnecting] = useState(false);
   const [showRules, setShowRules] = useState(false);
+  const [copySuccess, setCopySuccess] = useState(false);
   const { connect, roomId, players, startGame, phase, socket, toggleReady } = useGameStore();
 
   // Reset connecting state if we successfully join
@@ -86,10 +93,31 @@ export function Lobby() {
     const allReady = Object.values(players).length > 0 && Object.values(players).every(p => p.isReady);
     const me = (socket && socket.id) ? players[socket.id] : null;
 
+    const copyInviteLink = () => {
+      const url = new URL(window.location.href);
+      url.searchParams.set('room', roomId);
+      navigator.clipboard.writeText(url.toString());
+      setCopySuccess(true);
+      setTimeout(() => setCopySuccess(false), 2000);
+    };
+
     return (
       <div className="absolute inset-0 flex items-center justify-center bg-black/80 text-white z-50">
         <div className="bg-zinc-900 p-8 rounded-xl shadow-2xl max-w-md w-full border border-zinc-800">
-          <h2 className="text-3xl font-bold mb-6 text-center text-emerald-400">Room: {roomId}</h2>
+          <div className="flex justify-between items-center mb-6">
+            <h2 className="text-3xl font-bold text-emerald-400">Room: {roomId}</h2>
+            <button 
+              onClick={copyInviteLink}
+              className={`p-2 rounded-lg transition-all ${copySuccess ? 'bg-emerald-500 text-white' : 'bg-zinc-800 text-zinc-400 hover:text-white'}`}
+              title="Copy Invite Link"
+            >
+              {copySuccess ? (
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+              ) : (
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
+              )}
+            </button>
+          </div>
           
           <div className="mb-6">
             <h3 className="text-xl font-semibold mb-3 text-zinc-300">Players ({Object.keys(players).length}/8)</h3>

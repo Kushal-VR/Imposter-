@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { useThree, useFrame } from '@react-three/fiber';
 import { useKeyboardControls } from '@react-three/drei';
 import { useGameStore } from '../store/gameStore';
@@ -49,15 +49,15 @@ export function Player() {
   const [effects, setEffects] = useState<{ id: number, pos: Vector3, color: string, type: 'place' | 'remove', shape?: 'cube' | 'sphere' | 'cylinder' }[]>([]);
   const handRef = useRef<Mesh>(null);
 
-  const addEffect = (pos: Vector3, color: string, type: 'place' | 'remove', shape?: 'cube' | 'sphere' | 'cylinder') => {
+  const addEffect = useCallback((pos: Vector3, color: string, type: 'place' | 'remove', shape?: 'cube' | 'sphere' | 'cylinder') => {
     const id = Date.now() + Math.random();
     setEffects(prev => [...prev, { id, pos, color, type, shape }]);
     setTimeout(() => {
       setEffects(prev => prev.filter(e => e.id !== id));
     }, 1000);
-  };
+  }, []);
 
-  const handleCurve = () => {
+  const handleCurve = useCallback(() => {
     if (phase !== 'Build') return;
     
     const rayOrigin = camera.position.clone();
@@ -85,7 +85,7 @@ export function Player() {
         }
       }
     }
-  };
+  }, [phase, camera, rapier, world, gameWorld, currentShape, currentColor, updateBlock, addEffect]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -114,7 +114,7 @@ export function Player() {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [role, phase, lastSabotage, sabotage, setCurrentColor, setCurrentShape, currentShape, currentColor, gameWorld, updateBlock, world, camera, rapier]);
+  }, [role, phase, lastSabotage, sabotage, setCurrentColor, setCurrentShape, currentShape, currentColor, gameWorld, updateBlock, world, camera, rapier, handleCurve, setLastSabotage]);
 
   useEffect(() => {
     let isDragging = false;
@@ -247,7 +247,7 @@ export function Player() {
 
     window.addEventListener('mousedown', handleMouseClick);
     return () => window.removeEventListener('mousedown', handleMouseClick);
-  }, [camera, phase, gameWorld, currentColor, currentShape, placeBlock, removeBlock, world, rapier]);
+  }, [camera, phase, gameWorld, currentColor, currentShape, placeBlock, removeBlock, world, rapier, addEffect]);
 
   // Sync position to server
   useEffect(() => {
