@@ -24,12 +24,6 @@ export function setupSockets(io: Server) {
           votes: {},
           timer: 0,
         };
-        // Generate floor
-        for (let x = -10; x <= 10; x++) {
-          for (let z = -10; z <= 10; z++) {
-            rooms[roomId].world[`${x},-1,${z}`] = { x, y: -1, z, color: '#4ade80' };
-          }
-        }
       }
 
       const room = rooms[roomId];

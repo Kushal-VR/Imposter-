@@ -207,6 +207,26 @@ export function Player() {
                 });
                 addEffect(placePos, currentColor, 'place', currentShape);
               }
+            } else if (userData && userData.isGround) {
+              if (e.button === 0) { // Left click - place
+                const hitPos = ray.pointAt((hit as any).toi);
+                const normal = hit.normal;
+                if (!normal) return;
+                
+                const placePos = new Vector3(
+                  Math.round(hitPos.x + normal.x * 0.5),
+                  Math.round(hitPos.y + normal.y * 0.5),
+                  Math.round(hitPos.z + normal.z * 0.5)
+                );
+                placeBlock({
+                  x: placePos.x,
+                  y: placePos.y,
+                  z: placePos.z,
+                  color: currentColor,
+                  shape: currentShape
+                });
+                addEffect(placePos, currentColor, 'place', currentShape);
+              }
             }
           }
         } else if (e.button === 0) {

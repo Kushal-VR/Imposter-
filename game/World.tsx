@@ -22,6 +22,15 @@ export function World() {
 
   return (
     <>
+      {/* Ground Plane */}
+      <RigidBody type="fixed" colliders="cuboid" position={[0, -2, 0]} userData={{ isGround: true }}>
+        <mesh receiveShadow>
+          <boxGeometry args={[1000, 2, 1000]} />
+          <meshStandardMaterial color="#2d5a27" roughness={1} metalness={0} />
+        </mesh>
+      </RigidBody>
+      <gridHelper args={[1000, 100, "#4ade80", "#1a3a16"]} position={[0, -0.99, 0]} />
+
       {Object.values(world).map((block) => {
         const shape = block.shape || 'cube';
         const geo = shape === 'sphere' ? sphereGeo : shape === 'cylinder' ? cylGeo : boxGeo;

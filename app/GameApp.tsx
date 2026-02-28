@@ -1,7 +1,7 @@
 'use client';
 
 import { Canvas } from '@react-three/fiber';
-import { Sky, PointerLockControls, KeyboardControls, Environment, ContactShadows } from '@react-three/drei';
+import { Sky, PointerLockControls, KeyboardControls, Environment, OrbitControls } from '@react-three/drei';
 import { Physics } from '@react-three/rapier';
 import { useGameStore } from '../store/gameStore';
 import { Lobby } from '../components/Lobby';
@@ -29,7 +29,7 @@ export default function GameApp() {
           { name: 'jump', keys: ['Space'] },
         ]}
       >
-        <Canvas shadows camera={{ fov: 75 }}>
+        <Canvas shadows camera={{ position: [0, 5, 10], fov: 75 }}>
           <Sky sunPosition={[100, 20, 100]} turbidity={0.1} rayleigh={0.5} />
           <ambientLight intensity={0.4} />
           <directionalLight
@@ -56,6 +56,7 @@ export default function GameApp() {
           </Physics>
 
           {phase === 'Build' && <PointerLockControls />}
+          {phase === 'Lobby' && <OrbitControls autoRotate autoRotateSpeed={0.5} enableZoom={false} enablePan={false} />}
         </Canvas>
       </KeyboardControls>
     </div>
